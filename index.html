@@ -401,6 +401,27 @@
     });
 
     resetarJogo();
+        // Bloqueia o menu do botão direito do mouse no Android
+    window.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+    });
+
+    // Reconhece os cliques físicos do circuito do mouse
+    window.addEventListener('mousedown', (event) => {
+      // Ignora cliques se a janela de configuração estiver aberta
+      if (document.getElementById('custom-modal').style.display === 'flex') return;
+      
+      // Ignora se o jogador clicou nos botões superiores (Pausar, Reiniciar, Menu)
+      if (event.target.closest('.controls')) return;
+
+      if (event.button === 0) {
+        // Botão Esquerdo do mouse -> Jogador 1
+        acionarJogador(1);
+      } else if (event.button === 2) {
+        // Botão Direito do mouse -> Jogador 2
+        acionarJogador(2);
+      }
+    });
   </script>
 </body>
 </html>
