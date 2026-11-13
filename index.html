@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121212">
+  <title>Relógio de Xadrez</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #121212;
+      color: #ffffff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Barra superior */
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background-color: #1e1e1e;
+      border-bottom: 1px solid #333;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .controls select, .controls button {
+      background: #2c2c2c;
+      color: white;
+      border: 1px solid #444;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    .controls button:active { background: #444; }
+    .status-badge { font-size: 0.85rem; color: #aaa; }
+
+    /* Área dos relógios */
+    .clocks-container { display: flex; flex: 1; width: 100%; }
+    .clock-box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: background-color 0.15s ease;
+      border: 2px solid transparent;
+    }
+    #box1 { border-right: 1px solid #333; }
+
+    /* Estados visuais */
+    .inactive { background-color: #1c1c1c; color: #777; }
+    .active { background-color: #1b5e20; color: #ffffff; border-color: #4caf50; }
+    .low-time { background-color: #b71c1c !important; color: #ffffff; }
+    .flagged { background-color: #4a0000 !important; color: #ff5252; }
+
+    .player-label { font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; opacity: 0.8; }
+    .time-display { font-size: clamp(3.5rem, 12vw, 7.5rem); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .moves-display { margin-top: 12px; font-size: 1rem; opacity: 0.7; }
+
+    /* Janela Modal de Configuração Personalizada */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      padding: 16px;
+    }
+    .modal-box {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      border-radius: 12px;
+      padding: 20px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .modal-box h2 { margin-bottom: 16px; font-size: 1.25rem; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.9rem; color: #ccc; margin-bottom: 6px; }
+    .time-inputs { display: flex; gap: 8px; }
+    .time-inputs input {
+      width: 100%;
+      padding: 10px;
+      background: #2c2c2c;
+      border: 1px solid #555;
+      border-radius: 6px;
+      color: white;
+      font-size: 1rem;
+      text-align: center;
+    }
+    .checkbox-group { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 0.9rem; color: #ccc; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .btn-primary { background: #2e7d32 !important; border-color: #4caf50 !important; font-weight: bold; }
+
+    @media (orientation: portrait) {
+      .clocks-container { flex-direction: column; }
+      #box1 { border-right: none; border-bottom: 1px solid #333; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Barra de Controles -->
+  <div class="controls">
+    <div>
+      <select id="preset" onchange="selecionarRitmo()">
+        <option value="60,0">Bullet 1+0</option>
+        <option value="180,0">Blitz 3+0</option>
+        <option value="180,2" selected>Blitz 3+2</option>
+        <option value="300,0">Blitz 5+0</option>
+        <option value="300,3">Blitz 5+3</option>
+        <option value="600,0">Rápida 10+0</option>
+        <option value="900,10">Rápida 15+10</option>
+        <option value="custom">Personalizado...</option>
+      </select>
+    </div>
+
+    <div class="status-badge" id="status-text">Aguardando botão (A ou B)</div>
+
+    <div>
+      <button onclick="abrirModal()" title="Configurar tempo">⚙️</button>
+      <button onclick="pausarJogo()" id="btn-pause">Pausar</button>
+      <button onclick="resetarJogo()">Reiniciar</button>
+    </div>
+  </div>
+
+  <!-- Relógios -->
+  <div class="clocks-container">
+    <div id="box1" class="clock-box inactive" onclick="acionarJogador(1)">
+      <div class="player-label">Jogador 1 (A)</div>
+      <div class="time-display" id="time1">03:00</div>
+      <div class="moves-display" id="moves1">Lances: 0</div>
+    </div>
+
+    <div id="box2" class="clock-box inactive" onclick="acionarJogador(2)">
+      <div class="player-label">Jogador 2 (B)</div>
+      <div class="time-display" id="time2">03:00</div>
+      <div class="moves-display" id="moves2">Lances: 0</div>
+    </div>
+  </div>
+
+  <!-- Modal de Configuração Personalizada -->
+  <div class="modal-overlay" id="custom-modal">
+    <div class="modal-box">
+      <h2>Tempo Personalizado</h2>
+      
+      <div class="form-group">
+        <label>Jogador 1 (Minutos : Segundos : Acréscimo)</label>
+        <div class="time-inputs">
+          <input type="number" id="p1-min" min="0" max="180" value="5" placeholder="Min">
+          <input type="number" id="p1-sec" min="0" max="59" value="0" placeholder="Seg">
+          <input type="number" id="p1-inc" min="0" max="120" value="3" placeholder="+Seg">
+        </div>
+      </div>
+
+      <div class="checkbox-group">
+        <input type="checkbox" id="same-time" checked onchange="alternarMesmoTempo()">
+        <label for="same-time">Mesmo tempo para o Jogador 2</label>
+      </div>
+
+      <div class="form-group" id="p2-config" style="display: none;">
+        <label>Jogador 2 (Minutos : Segundos : Acréscimo)</label>
+        <div class="time-inputs">
+          <input type="number" id="p2-min" min="0" max="180" value="5" placeholder="Min">
+          <input type="number" id="p2-sec" min="0" max="59" value="0" placeholder="Seg">
+          <input type="number" id="p2-inc" min="0" max="120" value="3" placeholder="+Seg">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primary" onclick="salvarPersonalizado()">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let tempoInicial1 = 180000;
+    let tempoInicial2 = 180000;
+    let inc1 = 2000;
+    let inc2 = 2000;
+
+    let tempo1 = tempoInicial1;
+    let tempo2 = tempoInicial2;
+    let turno = 0;
+    let lances1 = 0;
+    let lances2 = 0;
+    let ultimoTick = null;
+    let intervalo = null;
+    let wakeLock = null;
+
+    // Registro do Service Worker para modo 100% Offline (PWA)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(err => console.log('Erro SW:', err));
+    }
+
+    // Som mecânico gerado via Web Audio API
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function tocarSomClique() {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(520, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.04);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.04);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.04);
+    }
+
+    async function ativarWakeLock() {
+      try {
+        if ('wakeLock' in navigator && !wakeLock) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {}
+    }
+
+    function formatarTempo(ms) {
+      if (ms <= 0) return "00:00.0";
+      const totalSegundos = ms / 1000;
+      if (totalSegundos < 10) return totalSegundos.toFixed(1).padStart(4, '0');
+      const minutos = Math.floor(Math.ceil(totalSegundos) / 60);
+      const segundos = Math.ceil(totalSegundos) % 60;
+      return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+    }
+
+    function acionarJogador(jogador) {
+      if (turno === -1) return;
+      ativarWakeLock();
+
+      if (turno === 0) {
+        tocarSomClique();
+        turno = jogador === 1 ? 2 : 1;
+        ultimoTick = performance.now();
+        iniciarLoop();
+        atualizarInterface();
+        return;
+      }
+
+      if (jogador === 1 && turno === 1) {
+        tocarSomClique();
+        tempo1 += inc1;
+        lances1++;
+        turno = 2;
+        ultimoTick = performance.now();
+      } else if (jogador === 2 && turno === 2) {
+        tocarSomClique();
+        tempo2 += inc2;
+        lances2++;
+        turno = 1;
+        ultimoTick = performance.now();
+      }
+
+      atualizarInterface();
+    }
+
+    function iniciarLoop() {
+      if (intervalo) clearInterval(intervalo);
+      intervalo = setInterval(() => {
+        if (turno !== 1 && turno !== 2) return;
+        const agora = performance.now();
+        const delta = agora - ultimoTick;
+        ultimoTick = agora;
+
+        if (turno === 1) {
+          tempo1 -= delta;
+          if (tempo1 <= 0) { tempo1 = 0; finalizarPorTempo(1); }
+        } else if (turno === 2) {
+          tempo2 -= delta;
+          if (tempo2 <= 0) { tempo2 = 0; finalizarPorTempo(2); }
+        }
+        atualizarInterface();
+      }, 50);
+    }
+
+    function finalizarPorTempo(perdedor) {
+      turno = -1;
+      clearInterval(intervalo);
+      document.getElementById('status-text').innerText = `Tempo esgotado! Jogador ${perdedor} perdeu.`;
+      atualizarInterface();
+    }
+
+    function pausarJogo() {
+      if (turno === 1 || turno === 2) {
+        clearInterval(intervalo);
+        turno = 0;
+        document.getElementById('status-text').innerText = "Jogo Pausado";
+        atualizarInterface();
+      }
+    }
+
+    function selecionarRitmo() {
+      const val = document.getElementById('preset').value;
+      if (val === 'custom') {
+        abrirModal();
+        return;
+      }
+      const [segundos, inc] = val.split(',').map(Number);
+      tempoInicial1 = segundos * 1000;
+      tempoInicial2 = segundos * 1000;
+      inc1 = inc * 1000;
+      inc2 = inc * 1000;
+      resetarJogo();
+    }
+
+    function resetarJogo() {
+      clearInterval(intervalo);
+      tempo1 = tempoInicial1;
+      tempo2 = tempoInicial2;
+      turno = 0;
+      lances1 = 0;
+      lances2 = 0;
+      document.getElementById('status-text').innerText = "Pronto! Aperte A ou B.";
+      atualizarInterface();
+    }
+
+    // Funções do Modal Personalizado
+    function abrirModal() {
+      pausarJogo();
+      document.getElementById('custom-modal').style.display = 'flex';
+    }
+
+    function fecharModal() {
+      document.getElementById('custom-modal').style.display = 'none';
+    }
+
+    function alternarMesmoTempo() {
+      const igual = document.getElementById('same-time').checked;
+      document.getElementById('p2-config').style.display = igual ? 'none' : 'block';
+    }
+
+    function salvarPersonalizado() {
+      const p1Min = Math.max(0, Number(document.getElementById('p1-min').value));
+      const p1Sec = Math.max(0, Number(document.getElementById('p1-sec').value));
+      const p1Inc = Math.max(0, Number(document.getElementById('p1-inc').value));
+
+      tempoInicial1 = ((p1Min * 60) + p1Sec) * 1000;
+      inc1 = p1Inc * 1000;
+
+      if (document.getElementById('same-time').checked) {
+        tempoInicial2 = tempoInicial1;
+        inc2 = inc1;
+      } else {
+        const p2Min = Math.max(0, Number(document.getElementById('p2-min').value));
+        const p2Sec = Math.max(0, Number(document.getElementById('p2-sec').value));
+        const p2Inc = Math.max(0, Number(document.getElementById('p2-inc').value));
+        tempoInicial2 = ((p2Min * 60) + p2Sec) * 1000;
+        inc2 = p2Inc * 1000;
+      }
+
+      if (tempoInicial1 === 0) tempoInicial1 = 10000; // Mínimo 10s
+      if (tempoInicial2 === 0) tempoInicial2 = 10000;
+
+      document.getElementById('preset').value = 'custom';
+      fecharModal();
+      resetarJogo();
+    }
+
+    function atualizarInterface() {
+      const box1 = document.getElementById('box1');
+      const box2 = document.getElementById('box2');
+
+      document.getElementById('time1').innerText = formatarTempo(tempo1);
+      document.getElementById('time2').innerText = formatarTempo(tempo2);
+      document.getElementById('moves1').innerText = `Lances: ${lances1}`;
+      document.getElementById('moves2').innerText = `Lances: ${lances2}`;
+
+      box1.className = 'clock-box ' + (turno === 1 ? 'active' : 'inactive');
+      box2.className = 'clock-box ' + (turno === 2 ? 'active' : 'inactive');
+
+      if (tempo1 > 0 && tempo1 < 10000 && turno === 1) box1.classList.add('low-time');
+      if (tempo2 > 0 && tempo2 < 10000 && turno === 2) box2.classList.add('low-time');
+      if (tempo1 === 0) box1.classList.add('flagged');
+      if (tempo2 === 0) box2.classList.add('flagged');
+
+      if (turno === 1) document.getElementById('status-text').innerText = "Vez do Jogador 1";
+      if (turno === 2) document.getElementById('status-text').innerText = "Vez do Jogador 2";
+    }
+
+    // Escuta os botões da Raspberry Pi Pico (ignorando teclas se o modal estiver aberto)
+    window.addEventListener('keydown', (event) => {
+      if (document.getElementById('custom-modal').style.display === 'flex') return;
+      if (event.repeat) return;
+
+      const tecla = event.key.toLowerCase();
+      if (tecla === 'a') acionarJogador(1);
+      else if (tecla === 'b') acionarJogador(2);
+    });
+
+    resetarJogo();
+  </script>
+</body>
+</html>
